@@ -23,6 +23,7 @@ class StaticGrid(object):
     self._Y = Y
     self._X = X
     # non-transient grid parameters
+    self._StaticCells = []
     self._k = []
     self._H = []
     self._T = []
@@ -90,4 +91,54 @@ class StaticGrid(object):
           for j in range(self._ny):
             templist.append((Dh, Dh))
           self._D.append(templist)
+    return 0  
 
+  def addSourceFlow(self, sourcefunc):
+    """ add a source function that is of the form:
+    N = f(x,y,t)
+    where N is the outflux rate, 
+    x is the global x, 
+    y is the global y,
+    t is the time of evaluation
+    """
+    return 0
+
+  def addType3Flow(self, type3flowfunc):
+    """adds a type 3 vertical boundary condition of the form
+    C,R = f(x,y,kp,h0)
+    where C is the coefficient [1/T] that is in the solution matrix
+    R is the right hand side term [L/T], 
+    x is the global x,
+    y is the global y
+    kp is the conductivity of the leaky layer
+    h0 is the head above or below the leaky layer
+    """
+    return 0
+
+  def addType3Conc(self, type3concfunc):
+
+    return 0
+
+class DynamicGrid(object):
+  """ This grid must have the same dimensions as any StaticGrid in the overall
+  simulation. 
+
+  """
+  def __init__(self, nx, ny, dx, dy):
+    self._nx = nx
+    self._ny = ny
+    self._dx = dx
+    self._dy = dy
+    self._h = []
+    self._c = []
+
+  def setHead(self, head):
+    """ This function takes in a head vector from a sparse matrix solve
+    and stores it as a 2D list """
+
+    return 0
+
+  def setConcentration(self, conc):
+    """ this function takes in a concentration vector from a sparse matrix:
+    solve and stores it as a 2D list"""
+    return 0
