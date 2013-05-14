@@ -129,16 +129,68 @@ class DynamicGrid(object):
     self._ny = ny
     self._dx = dx
     self._dy = dy
-    self._h = []
-    self._c = []
+    self._h = np.zeros((ny, nx))
+    self._c = np.zeros((ny, nx))
 
-  def setHead(self, head):
+  def setHead(self, head, bc):
     """ This function takes in a head vector from a sparse matrix solve
-    and stores it as a 2D list """
+    and stores it as a 2D array """
+    # handles inner, sparse solved values
+    for i in xrange(1,self._nx-1):
+      for j in xrange(1,self._ny-1):
+        self._h[i][j] = head[(i-1) + (self._nx - 2) * (j-1)]
+
+    # handles boundary values
+    for i in range(ny):
+      if bc.west_type == "1":
+        self._h[i,0] = bc.west_val            
+      else:
+        self._h[i,0] = self._h[i,1] + 1.0/dx * bc.west_val
+      if bc.east_type == "1":
+        self._h[i,-1] = bc.east_val
+      else:
+        self._h[i,-1] = self._h[i,-2] - 1.0/dx * bc.east_val
+
+    for i in xrange(0,nx):
+      if bc.south_type == "1":
+        self._h[0,i] = bc.south_val
+      else:
+        self._h[0,i] = self._h[1,i] + 1.0/dy * bc.south_val
+      if bc.north_type == "1":
+        self._h[-1,i] = bc.north_val
+      else:
+        self._h[-1,i] = self._h[-2,i] + 1/dy * bc.south_val
 
     return 0
 
-  def setConcentration(self, conc):
+  def setConcentration(self, conc, bc):
     """ this function takes in a concentration vector from a sparse matrix:
-    solve and stores it as a 2D list"""
+    solve and stores it as a 2D array"""
+
+    # handles inner values
+    for i in xrange(1,self._nx-1):
+      for j in xrange(1,self._ny-1):
+        self._c[i][j] = conc[(i-1) + (self._nx - 2) * (j-1)]
+
+    # handles boundary values
+    for i in range(ny):
+      if bc.west_type == "1":
+        self._c[i,0] = bc.west_val            
+      else:
+        self._c[i,0] = self._c[i,1] + 1.0/dx * bc.west_val
+      if bc.east_type == "1":
+        self._c[i,-1] = bc.east_val
+      else:
+        self._c[i,-1] = self._c[i,-2] - 1.0/dx * bc.east_val
+
+    for i in xrange(0,nx):
+      if bc.south_type == "1":
+        self._c[0,i] = bc.south_val
+      else:
+        self._c[0,i] = self._c[1,i] + 1.0/dy * bc.south_val
+      if bc.north_type == "1":
+        self._c[-1,i] = bc.north_val
+      else:
+        self._c[-1,i] = self._c[-2,i] + 1/dy * bc.south_val
+
     return 0
