@@ -22,12 +22,15 @@ class StaticGrid(object):
     X,Y = np.mgrid[xwest:xeast:nx*1j, ysouth:ynorth:ny*1j]
     self._Y = Y
     self._X = X
-    # non-transient grid parameters
-    self._StaticCells = []
+    # non-transient physical parameters
     self._k = []
     self._H = []
     self._T = []
     self._D = []
+    self._S = []
+    self._flowSource =[]
+    self._flowType3 = []
+    self._transportType3 = []
 
   def setConductivity(self, kh = 10., homogeneous = True, isotropic = True):
     """ This function sets the hydraulic conductivity of each cell. 
@@ -60,7 +63,21 @@ class StaticGrid(object):
         for j in range(self._ny):
           templist.append(H)
         self._H.append(templist)
+    return 0
 
+  def setStorage(self, S = 0.2, homogeneous = True ):
+    """ This function sets the specific storage of each cell. 
+    the storage is stored such that 
+    S_{ij} = S[i][j]
+    """
+    # clears previous Storage
+    self._S = []
+    if homogeneous == True:
+      for i in range(self._nx):
+        templist = []
+        for j in range(self._ny):
+          templist.append(S)
+        self._S.append(templist)
     return 0
 
   def calcTransmissivity(self):
@@ -93,17 +110,25 @@ class StaticGrid(object):
           self._D.append(templist)
     return 0  
 
-  def addSourceFlow(self, sourcefunc):
+  def addSourceFlow(self, sourcefunc = 0):
     """ add a source function that is of the form:
     N = f(x,y,t)
     where N is the outflux rate, 
     x is the global x, 
     y is the global y,
     t is the time of evaluation
+    
     """
+    self._flowSource = []
+    for i in range(self._nx):
+      templist = []
+      for j in range(self._ny):
+        templist.append(sourcefunc)
+      self._flowSource.append(templist)
+
     return 0
 
-  def addType3Flow(self, type3flowfunc):
+  def addType3Flow(self, type3flowfunc = 0.):
     """adds a type 3 vertical boundary condition of the form
     C,R = f(x,y,kp,h0)
     where C is the coefficient [1/T] that is in the solution matrix
@@ -115,7 +140,7 @@ class StaticGrid(object):
     """
     return 0
 
-  def addType3Conc(self, type3concfunc):
+  def addType3Trans(self, type3transfunc = 0.):
 
     return 0
 
@@ -132,7 +157,7 @@ class DynamicGrid(object):
     self._h = np.zeros((ny, nx))
     self._c = np.zeros((ny, nx))
 
-  def setHead(self, head, bc):
+  def setHead(self, head, flowbctype, flowbcvals):
     """ This function takes in a head vector from a sparse matrix solve
     and stores it as a 2D array """
     # handles inner, sparse solved values
@@ -141,25 +166,30 @@ class DynamicGrid(object):
         self._h[i][j] = head[(i-1) + (self._nx - 2) * (j-1)]
 
     # handles boundary values
-    for i in range(ny):
-      if bc.west_type == "1":
-        self._h[i,0] = bc.west_val            
+    
+    for i in range(self._ny):
+      #west
+      if flowbctype[0] == 0:
+        self._h[0,i] = flowbcvals[0]            
       else:
-        self._h[i,0] = self._h[i,1] + 1.0/dx * bc.west_val
-      if bc.east_type == "1":
-        self._h[i,-1] = bc.east_val
+        self._h[0,i] = self._h[1,i] + 1.0/self._dx * flowbcvals[0]
+      # east
+      if flowbctype[1] == 0:
+        self._h[-1,i] = flowbcvals[1]
       else:
-        self._h[i,-1] = self._h[i,-2] - 1.0/dx * bc.east_val
+        self._h[-1,i] = self._h[-2,i] - 1.0/self._dx * flowbcvals[1]
 
-    for i in xrange(0,nx):
-      if bc.south_type == "1":
-        self._h[0,i] = bc.south_val
+    for i in xrange(0,self._nx):
+      # south
+      if flowbctype[2] == 0:
+        self._h[i,0] = flowbcvals[2]
       else:
-        self._h[0,i] = self._h[1,i] + 1.0/dy * bc.south_val
-      if bc.north_type == "1":
-        self._h[-1,i] = bc.north_val
+        self._h[i,0] = self._h[i,1] + 1.0/self._dy * flowbcvals[2]
+      # north
+      if flowbctype[3] == 0:
+        self._h[i,-1] = flowbcvals[3]
       else:
-        self._h[-1,i] = self._h[-2,i] + 1/dy * bc.south_val
+        self._h[i,-1] = self._h[i,-2] + 1/self._dy * flowbcvals[3]
 
     return 0
 
@@ -173,24 +203,29 @@ class DynamicGrid(object):
         self._c[i][j] = conc[(i-1) + (self._nx - 2) * (j-1)]
 
     # handles boundary values
-    for i in range(ny):
-      if bc.west_type == "1":
-        self._c[i,0] = bc.west_val            
+    
+    for i in range(self._ny):
+      #west
+      if flowbctype[0] == 0:
+        self._h[0,i] = flowbcvals[0]            
       else:
-        self._c[i,0] = self._c[i,1] + 1.0/dx * bc.west_val
-      if bc.east_type == "1":
-        self._c[i,-1] = bc.east_val
+        self._h[0,i] = self._h[1,i] + 1.0/self._dx * flowbcvals[0]
+      # east
+      if flowbctype[1] == 0:
+        self._h[-1,i] = flowbcvals[1]
       else:
-        self._c[i,-1] = self._c[i,-2] - 1.0/dx * bc.east_val
+        self._h[-1,i] = self._h[-2,i] - 1.0/self._dx * flowbcvals[1]
 
-    for i in xrange(0,nx):
-      if bc.south_type == "1":
-        self._c[0,i] = bc.south_val
+    for i in xrange(0,self._nx):
+      # south
+      if flowbctype[2] == 0:
+        self._h[i,0] = flowbcvals[2]
       else:
-        self._c[0,i] = self._c[1,i] + 1.0/dy * bc.south_val
-      if bc.north_type == "1":
-        self._c[-1,i] = bc.north_val
+        self._h[i,0] = self._h[i,1] + 1.0/self._dy * flowbcvals[2]
+      # north
+      if flowbctype[3] == 0:
+        self._h[i,-1] = flowbcvals[3]
       else:
-        self._c[-1,i] = self._c[-2,i] + 1/dy * bc.south_val
+        self._h[i,-1] = self._h[i,-2] + 1/self._dy * flowbcvals[3]
 
     return 0
