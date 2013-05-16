@@ -57,9 +57,6 @@ class FTSystem(object):
     If this is an initial timestep, leave the rhs value as an empty list
     returns the solved column vector of inner head values.
     """
-    # convenience function for harmonic mean
-    def HarmAvg(T1, T2, dx1, dx2):
-        return (dx1 + dx2) / ( (dx1/T1) + (dx2/T2))
 
     nx = self._SG._nx
     ny = self._SG._ny
@@ -111,7 +108,7 @@ class FTSystem(object):
       CS = 2.0 * dx / (dy + dy) * HarmAvg(TC[1], TS[1], dy, dy)
       CN = 2.0 * dx / (dy + dy) * HarmAvg(TC[1], TN[1], dy, dy)
 
-      # am i on west face
+      # am i on west boundary
       if  row == 1 :
         if self._flowbctype[0] == 1:
           r[i] -= self._flowbcvals[0]
@@ -122,7 +119,7 @@ class FTSystem(object):
         L[i-1] = CW
         C[i] -= CW
 
-      # east face
+      # east boundary
       if row == (nx-2):
         if self._flowbctype[1] == 1:
           r[i] += self._flowbcvals[1]
@@ -133,7 +130,7 @@ class FTSystem(object):
         R[i+1] = CE
         C[i] -= CE
 
-      # south face
+      # south boundary
       if i < (nx-2):
         if self._flowbctype[2] ==  1:
           r[i] -= self._flowbcvals[2]
@@ -144,7 +141,7 @@ class FTSystem(object):
         Loff[i-(nx-2)] = CS
         C[i] -= CS
 
-      # north face
+      # north boundary
       if i >= (N - (nx-2)):
         if self._flowbctype[3] == 1:
           r[i] += self._flowbcvals[3]
@@ -177,7 +174,146 @@ class FTSystem(object):
     self._FlowGrids.append(dg)
     return 0
 
-  def solveTransportSystem(self):
+  def solveTransportSystem(self, FG, rhs = []):
+    """ solves flow system for a single timestep. This system is solved implicitly
+    and requires an initialization of the right hand side values from the 
+    previous timestep.
+    If this is an initial timestep, leave the rhs value as an empty list
+    returns the solved column vector of inner head values.
+    requires the previous flow grid.
+    """
+    nx = self._SG._nx
+    ny = self._SG._ny
+    dx = self._SG._dx
+    dy = self._SG._dy
+    N = (nx - 2) * (ny - 2)
+    Loff = np.zeros((N,1))
+    L    = np.zeros((N,1))
+    R    = np.zeros((N,1))
+    Roff = np.zeros((N,1))
+    C = np.zeros((N,1))
+
+    if r.all() == False:    
+      r = np.zeros((N,1))
+
+    tinit = time()
+
+    for i in xrange(N):
+      
+      # specify index of row and column in grid
+      row = ( i % (nx-2) ) + 1        
+      col = i // (nx-2) + 1 
+      if col == 0 :
+        col = (nx-2)
+      # determine the center node's global x and y coordinates. 
+      x = self._SG._xw + self._SG._dx * col
+      y = self._SG._ys + self._SG._dy * row
+
+      if r.all() != False:
+        C[i] += self._SG._S[row][col] /dt
+
+      # Type 3 (leakage)
+      r[i] -= self._SG._kPart * self._SG._cEq * dx * dy * self._SG._H[row][col]
+      C[i] -= self._SG._kPart * dx * dy * self._SG._H[row][col]
+
+      # get advective face velocities. 
+      # picks concentration for upstream weighting
+      #west
+      vw = self._SG._k[row][col] / (self._SG._dx * self._SG._poro[row][col])* \
+          (self._DG._h[row][col] - self._DG._h[row - 1][col])
+      #east
+      ve = self._SG._k[row][col] / (self._SG._dx * self._SG._poro[row][col])* \
+          (self._DG._h[row + 1 ][col] - self._DG._h[row][col])
+      #south
+      vs = self._SG._k[row][col] / (self._SG._dy * self._SG._poro[row][col])* \
+          (self._DG._h[row][col] - self._DG._h[row][col-1])
+      #north
+      v3 = self._SG._k[row][col] / (self._SG._dy * self._SG._poro[row][col])* \
+          (self._DG._h[row ][col + 1] - self._DG._h[row][col])
+
+      # on west boundary
+      if vw >= 0.:
+        CVW = "W"
+      else:
+        CVW = "C"
+      # east boundary
+      if ve >= 0.:
+      # south boundary
+      if vs >= 0.:
+      # north boundary
+      if vn >= 0.:
+
+      # diffusion coefficients
+      CW = 2.0 * dy / (dx + dx) * self._SG._D[row][col]
+      CE = 2.0 * dy / (dx + dx) * self._SG._D[row][col]
+      CS = 2.0 * dx / (dy + dy) * self._SG._D[row][col]
+      CN = 2.0 * dx / (dy + dy) * self._SG._D[row][col]
+
+      # am i on west boundary
+      if  row == 1 :
+        if self._transbctype[0] == 1:
+          r[i] -= self._transbcvals[0]
+        else:
+          r[i] -= CW * self._transbcvals[0]
+          C[i] -= CW
+      else:
+        L[i-1] = CW
+        C[i] -= CW
+
+      # east boundary
+      if row == (nx-2):
+        if self._transbctype[1] == 1:
+          r[i] += self._transbcvals[1]
+        else:
+          r[i] -= CE * self._transbcvals[1]
+          C[i] -= CE
+      else:
+        R[i+1] = CE
+        C[i] -= CE
+
+      # south boundary
+      if i < (nx-2):
+        if self._transbctype[2] ==  1:
+          r[i] -= self._transbcvals[2]
+        else:
+          r[i] -= CS * self._transbcvals[2]
+          C[i] -= CS
+      else:
+        Loff[i-(nx-2)] = CS
+        C[i] -= CS
+
+      # north boundary
+      if i >= (N - (nx-2)):
+        if self._transbctype[3] == 1:
+          r[i] += self._transbcvals[3]
+        else:
+          r[i] -= CN * self._transbcvals[3]
+          C[i] -= CN
+      else:
+        Roff[i+(nx-2)] = CN
+        C[i] -= CN
+
+    # end of  loop
+    tpop = time()
+    print "matrix create time = " +str(tpop - tinit)
+
+    # create new sparse matrix from pieces 
+    data = np.hstack((Loff, L, C, R, Roff))
+    data = np.transpose(data)
+    diags = np.array([-(nx-2), -1, 0, 1, (nx-2)])
+    Abuilt = sp.spdiags(data,diags,N,N)
+
+    
+    # print Abuilt.todense()
+    b = splinalg.spsolve(Abuilt,r)
+
+    tmatsolve = time()
+    print "linalg solve time=  " + str( tmatsolve - tpop)
+
+    dg = DynamicGrid(self._SG._nx, self._SG._ny, self._SG._dx, self._SG._dy)
+    dg.setConcentration(b, self._transbctype, self._transbcvals)
+    self._FlowGrids.append(dg)
+    return 0
     return 0
 
   def flowTimeStep(self):
@@ -202,3 +338,6 @@ class FTSystem(object):
 
 # end FlowSystem
 
+# convenience function for harmonic mean
+def HarmAvg(T1, T2, dx1, dx2):
+    return (dx1 + dx2) / ( (dx1/T1) + (dx2/T2))

@@ -28,6 +28,7 @@ class StaticGrid(object):
     self._T = []
     self._D = []
     self._S = []
+    self._poro = []
     self._flowSource =[]
     self._flowType3 = []
     self._transportType3 = []
@@ -65,6 +66,20 @@ class StaticGrid(object):
         self._H.append(templist)
     return 0
 
+  def setPorosity(self, poro = 0.30, homogeneous = True ):
+    """ This function sets the porosity of each cell. 
+    the porosity is stored such that 
+    poro{ij} = poro[i][j]
+    """
+    # clears previous porosity
+    self._poro = []
+    if homogeneous == True:
+      for i in range(self._nx):
+        templist = []
+        for j in range(self._ny):
+          templist.append(poro)
+        self._poro.append(templist)
+    
   def setStorage(self, S = 0.2, homogeneous = True ):
     """ This function sets the specific storage of each cell. 
     the storage is stored such that 
