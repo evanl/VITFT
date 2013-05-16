@@ -18,7 +18,6 @@ class FTSystem(object):
     self._dt = dt
     self._SG = StaticGrid(xwest, xeast, ysouth, ynorth, nx, ny)
     self._FlowGrids = []
-    self._TransportGrids = []
 
   def setFlowBoundaryCondition(self, bctype = [0, 0, 0, 0], bcvals = [0, 0, 0, 0]):
     """ given in lists with the order:  [west, east, south, north]
@@ -57,7 +56,7 @@ class FTSystem(object):
     If this is an initial timestep, leave the rhs value as an empty list
     returns the solved column vector of inner head values.
     """
-
+    print "Solving Flow Timestep"
     nx = self._SG._nx
     ny = self._SG._ny
     dx = self._SG._dx
@@ -103,10 +102,10 @@ class FTSystem(object):
       TS = self._SG._T[row][col - 1]
       TN = self._SG._T[row][col + 1]
 
-      CW = 2.0 * dy / (dx + dx) * HarmAvg(TC[0], TW[0], dx, dx)
-      CE = 2.0 * dy / (dx + dx) * HarmAvg(TC[0], TE[0], dx, dx)
-      CS = 2.0 * dx / (dy + dy) * HarmAvg(TC[1], TS[1], dy, dy)
-      CN = 2.0 * dx / (dy + dy) * HarmAvg(TC[1], TN[1], dy, dy)
+      CW =  dy /  dx * HarmAvg(TC[0], TW[0], dx, dx)
+      CE =  dy /  dx * HarmAvg(TC[0], TE[0], dx, dx)
+      CS =  dx /  dy * HarmAvg(TC[1], TS[1], dy, dy)
+      CN =  dx /  dy * HarmAvg(TC[1], TN[1], dy, dy)
 
       # am i on west boundary
       if  row == 1 :
@@ -164,6 +163,7 @@ class FTSystem(object):
 
     
     # print Abuilt.todense()
+    # print r
     b = splinalg.spsolve(Abuilt,r)
 
     tmatsolve = time()
@@ -174,7 +174,7 @@ class FTSystem(object):
     self._FlowGrids.append(dg)
     return 0
 
-  def solveTransportSystem(self, FG, rhs = []):
+  def solveTransportSystem(self, FG, r = []):
     """ solves flow system for a single timestep. This system is solved implicitly
     and requires an initialization of the right hand side values from the 
     previous timestep.
@@ -182,6 +182,7 @@ class FTSystem(object):
     returns the solved column vector of inner head values.
     requires the previous flow grid.
     """
+    print "Solving Transport Timestep"
     nx = self._SG._nx
     ny = self._SG._ny
     dx = self._SG._dx
@@ -219,45 +220,42 @@ class FTSystem(object):
       # get advective face velocities. 
       # picks concentration for upstream weighting
       #west
-      vw = self._SG._k[row][col] / (self._SG._dx * self._SG._poro[row][col])* \
-          (self._DG._h[row][col] - self._DG._h[row - 1][col])
+      vw = self._SG._k[row][col][0] / (self._SG._dx * self._SG._poro[row][col])* \
+          (FG._h[row][col] - FG._h[row - 1][col])
       #east
-      ve = self._SG._k[row][col] / (self._SG._dx * self._SG._poro[row][col])* \
-          (self._DG._h[row + 1 ][col] - self._DG._h[row][col])
+      ve = self._SG._k[row][col][0] / (self._SG._dx * self._SG._poro[row][col])* \
+          (FG._h[row + 1 ][col] - FG._h[row][col])
       #south
-      vs = self._SG._k[row][col] / (self._SG._dy * self._SG._poro[row][col])* \
-          (self._DG._h[row][col] - self._DG._h[row][col-1])
+      vs = self._SG._k[row][col][1] / (self._SG._dy * self._SG._poro[row][col])* \
+          (FG._h[row][col] - FG._h[row][col-1])
       #north
-      v3 = self._SG._k[row][col] / (self._SG._dy * self._SG._poro[row][col])* \
-          (self._DG._h[row ][col + 1] - self._DG._h[row][col])
-
-      # on west boundary
-      if vw >= 0.:
-        CVW = "W"
-      else:
-        CVW = "C"
-      # east boundary
-      if ve >= 0.:
-      # south boundary
-      if vs >= 0.:
-      # north boundary
-      if vn >= 0.:
+      vn = self._SG._k[row][col][1] / (self._SG._dy * self._SG._poro[row][col])* \
+          (FG._h[row ][col + 1] - FG._h[row][col])
 
       # diffusion coefficients
-      CW = 2.0 * dy / (dx + dx) * self._SG._D[row][col]
-      CE = 2.0 * dy / (dx + dx) * self._SG._D[row][col]
-      CS = 2.0 * dx / (dy + dy) * self._SG._D[row][col]
-      CN = 2.0 * dx / (dy + dy) * self._SG._D[row][col]
+      CW =  dy / dx * self._SG._D[row][col][0]
+      CE =  dy / dx * self._SG._D[row][col][0]
+      CS =  dx / dy * self._SG._D[row][col][1]
+      CN =  dx / dy * self._SG._D[row][col][1]
 
       # am i on west boundary
       if  row == 1 :
         if self._transbctype[0] == 1:
           r[i] -= self._transbcvals[0]
         else:
+          # adv
+          r -= self._transbcvals[0] * vw
+          # diff
           r[i] -= CW * self._transbcvals[0]
           C[i] -= CW
       else:
-        L[i-1] = CW
+        # adv
+        if vw >= 0.:
+          L[i-1] -= vw
+        else:
+          C[i] -= vw
+        # diff
+        L[i-1] += CW
         C[i] -= CW
 
       # east boundary
@@ -265,10 +263,17 @@ class FTSystem(object):
         if self._transbctype[1] == 1:
           r[i] += self._transbcvals[1]
         else:
+          # adv
+          r -= self._transbcvals[1] * ve
+          # diff
           r[i] -= CE * self._transbcvals[1]
           C[i] -= CE
       else:
-        R[i+1] = CE
+        if ve >= 0.:
+          R[i+1] = -ve
+        else:
+          C[i] -= ve
+        R[i+1] += CE
         C[i] -= CE
 
       # south boundary
@@ -276,10 +281,19 @@ class FTSystem(object):
         if self._transbctype[2] ==  1:
           r[i] -= self._transbcvals[2]
         else:
+          # adv
+          r -= self._transbcvals[2] * vs
+          # diff
           r[i] -= CS * self._transbcvals[2]
           C[i] -= CS
       else:
-        Loff[i-(nx-2)] = CS
+        # adv
+        if vs >= 0.:
+          Loff[i-(nx-2)]  = vs
+        else:
+          C[i] -= vs
+        # diff
+        Loff[i-(nx-2)] += CS
         C[i] -= CS
 
       # north boundary
@@ -287,10 +301,17 @@ class FTSystem(object):
         if self._transbctype[3] == 1:
           r[i] += self._transbcvals[3]
         else:
+          # adv
+          r -= self._transbcvals[3] * vw
+          # diff
           r[i] -= CN * self._transbcvals[3]
           C[i] -= CN
       else:
-        Roff[i+(nx-2)] = CN
+        if vw >= 0.:
+          Roff[i+(nx-2)] -= vw
+        else:
+          C[i] -= vw
+        Roff[i+(nx-2)] += CN
         C[i] -= CN
 
     # end of  loop
@@ -305,14 +326,13 @@ class FTSystem(object):
 
     
     # print Abuilt.todense()
+    # print r 
     b = splinalg.spsolve(Abuilt,r)
 
     tmatsolve = time()
     print "linalg solve time=  " + str( tmatsolve - tpop)
 
-    dg = DynamicGrid(self._SG._nx, self._SG._ny, self._SG._dx, self._SG._dy)
-    dg.setConcentration(b, self._transbctype, self._transbcvals)
-    self._FlowGrids.append(dg)
+    FG.setConcentration(b, self._transbctype, self._transbcvals)
     return 0
     return 0
 
@@ -325,12 +345,26 @@ class FTSystem(object):
   def plotFlow(self, timestep = 0):
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    surf = ax.contourf(self._SG._X, self._SG_Y, self._FlowGrids[timestep], 55, \
+    surf = ax.contourf(self._SG._X, self._SG_Y, self._FlowGrids[timestep]._h, 55, \
         cmap = cm.Greys, linewidth = (3,))
     CB = plt.colorbar(surf) 
-    ax.set_title('Hydraulic Head Contours [ft]')
-    ax.set_xlabel('x-direction [ft]')
-    ax.set_ylabel('y-direction [ft]')
+    ax.set_title('Hydraulic Head Contours [m]')
+    ax.set_xlabel('x-direction [m]')
+    ax.set_ylabel('y-direction [m]')
+    ax.xaxis.grid(True)
+    ax.yaxis.grid(True)
+    plt.show()
+    return 0
+  
+  def plotTransport(self, timestep = 0):
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    surf = ax.contourf(self._SG._X, self._SG_Y, self._FlowGrids[timestep]._c, 55, \
+        cmap = cm.Greys, linewidth = (3,))
+    CB = plt.colorbar(surf) 
+    ax.set_title('Concentration')
+    ax.set_xlabel('x-direction [m]')
+    ax.set_ylabel('y-direction [m]')
     ax.xaxis.grid(True)
     ax.yaxis.grid(True)
     plt.show()

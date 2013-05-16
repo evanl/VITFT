@@ -31,7 +31,8 @@ class StaticGrid(object):
     self._poro = []
     self._flowSource =[]
     self._flowType3 = []
-    self._transportType3 = []
+    self._kPart = 0.0
+    self._cEq = 0.0
 
   def setConductivity(self, kh = 10., homogeneous = True, isotropic = True):
     """ This function sets the hydraulic conductivity of each cell. 
@@ -108,7 +109,7 @@ class StaticGrid(object):
       self._T.append(tempT)
     return 0
 
-  def setDiffusion(self, Dh = 10., homogeneous = True, isotropic = True):
+  def setDiffusion(self, Dh = 0.1, homogeneous = True, isotropic = True):
     """ This function sets the Diffusion coefficient for each cell. 
     The conductivity is stored as a tuple for Dx and Dy so that
     D_{ij}x = D[i][j][0]
@@ -155,12 +156,13 @@ class StaticGrid(object):
     """
     return 0
 
-  def addType3Trans(self, type3transfunc = 0.):
-
+  def setTransportType3(self, kPart = 0.0, cEq = 0.0):
+    self._kPart = kPart
+    self._cEq = cEq
     return 0
 
 class DynamicGrid(object):
-  """ This grid must have the same dimensions as any StaticGrid in the overall
+  """ This grid must have the sae dimensions as any StaticGrid in the overall
   simulation. 
 
   """
@@ -208,7 +210,7 @@ class DynamicGrid(object):
 
     return 0
 
-  def setConcentration(self, conc, bc):
+  def setConcentration(self, conc, transbctype, transbcvals):
     """ this function takes in a concentration vector from a sparse matrix:
     solve and stores it as a 2D array"""
 
@@ -221,26 +223,26 @@ class DynamicGrid(object):
     
     for i in range(self._ny):
       #west
-      if flowbctype[0] == 0:
-        self._h[0,i] = flowbcvals[0]            
+      if transbctype[0] == 0:
+        self._c[0,i] = transbcvals[0]            
       else:
-        self._h[0,i] = self._h[1,i] + 1.0/self._dx * flowbcvals[0]
+        self._c[0,i] = self._c[1,i] + 1.0/self._dx * transbcvals[0]
       # east
-      if flowbctype[1] == 0:
-        self._h[-1,i] = flowbcvals[1]
+      if transbctype[1] == 0:
+        self._c[-1,i] = transbcvals[1]
       else:
-        self._h[-1,i] = self._h[-2,i] - 1.0/self._dx * flowbcvals[1]
+        self._c[-1,i] = self._c[-2,i] - 1.0/self._dx * transbcvals[1]
 
     for i in xrange(0,self._nx):
       # south
-      if flowbctype[2] == 0:
-        self._h[i,0] = flowbcvals[2]
+      if transbctype[2] == 0:
+        self._c[i,0] = transbcvals[2]
       else:
-        self._h[i,0] = self._h[i,1] + 1.0/self._dy * flowbcvals[2]
+        self._c[i,0] = self._c[i,1] + 1.0/self._dy * transbcvals[2]
       # north
-      if flowbctype[3] == 0:
-        self._h[i,-1] = flowbcvals[3]
+      if transbctype[3] == 0:
+        self._c[i,-1] = transbcvals[3]
       else:
-        self._h[i,-1] = self._h[i,-2] + 1/self._dy * flowbcvals[3]
+        self._c[i,-1] = self._c[i,-2] + 1/self._dy * transbcvals[3]
 
     return 0

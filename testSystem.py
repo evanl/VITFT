@@ -46,6 +46,28 @@ class TestSystem(unittest.TestCase):
         val = 10. - 10./(self.FTS._SG._yn - self.FTS._SG._ys) * j * self.FTS._SG._dy
         self.assertAlmostEqual(self.FTS._FlowGrids[0]._h[i][j], val)
 
+  def testTransportDirichletZeros(self):
+    self.FTS._SG.setDiffusion(Dh = 0.1)
+    self.FTS.setTransportBoundaryCondition(bctype=[0,0,0,0], bcvals=[0.,0.,0.,0.])
+    rhs = np.zeros(())
+    self.FTS.solveFlowSystem(r =  rhs)
+    self.FTS.solveTransportSystem(self.FTS._FlowGrids[0], r = rhs)
+    for i in range(self.FTS._SG._nx):
+      for j in range(self.FTS._SG._ny):
+        self.assertAlmostEqual(0, self.FTS._FlowGrids[0]._c[i][j])
+
+  def testDiffusionOnly(self):
+    self.FTS._SG.setDiffusion(Dh = 0.1)
+    self.FTS.setTransportBoundaryCondition(bctype=[0 ,0 ,1,1], bcvals=[1.,0.,0.,0.])
+    self.FTS._SG.setTransportType3(kPart = 0.0, cEq = 0.0)
+    rhs = np.zeros(())
+    self.FTS.solveFlowSystem(r =  rhs)
+    self.FTS.solveTransportSystem(self.FTS._FlowGrids[0], r = rhs)
+    for i in range(self.FTS._SG._nx):
+      val = 1. - 1./(self.FTS._SG._xe - self.FTS._SG._xw) * i * self.FTS._SG._dx
+      for j in range(self.FTS._SG._ny):
+        self.assertAlmostEqual(val, self.FTS._FlowGrids[0]._c[i][j])
+       
 if __name__ == "__main__":
   unittest.main()
 

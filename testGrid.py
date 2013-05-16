@@ -45,11 +45,11 @@ class TestGrid(unittest.TestCase):
     self.FTS._SG.calcTransmissivity()
 
   def testHomogeneousIsotropicDiffusion(self):
-    self.FTS._SG.setDiffusion(Dh = 20., homogeneous = True, isotropic = True)
+    self.FTS._SG.setDiffusion(Dh = 0.2, homogeneous = True, isotropic = True)
     for i in range(self.FTS._SG._nx):
       for j in range(self.FTS._SG._ny):
-        self.assertEqual(self.FTS._SG._D[i][j][0], 20.)
-        self.assertEqual(self.FTS._SG._D[i][j][1], 20.)
+        self.assertEqual(self.FTS._SG._D[i][j][0], 0.2)
+        self.assertEqual(self.FTS._SG._D[i][j][1], 0.2)
 
 
 if __name__ == "__main__":
