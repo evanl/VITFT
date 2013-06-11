@@ -2,6 +2,10 @@ from time import time, clock
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as splinalg
+import matplotlib.pyplot as plt
+from matplotlib import cm
+import scipy
+
 from grid import StaticGrid 
 from grid import DynamicGrid 
 
@@ -210,8 +214,9 @@ class FTSystem(object):
       x = self._SG._xw + self._SG._dx * col
       y = self._SG._ys + self._SG._dy * row
 
-      if r.all() != False:
-        C[i] += self._SG._S[row][col] /dt
+      # print r
+      # if r.all() != False:
+        # C[i] += self._SG._S[row][col] /dt
 
       # Type 3 (leakage)
       r[i] -= self._SG._kPart * self._SG._cEq * dx * dy * self._SG._H[row][col]
@@ -220,17 +225,57 @@ class FTSystem(object):
       # get advective face velocities. 
       # picks concentration for upstream weighting
       #west
-      vw = self._SG._k[row][col][0] / (self._SG._dx * self._SG._poro[row][col])* \
+      vw = -self._SG._k[row][col][0] / (self._SG._dx * self._SG._poro[row][col])* \
           (FG._h[row][col] - FG._h[row - 1][col])
       #east
-      ve = self._SG._k[row][col][0] / (self._SG._dx * self._SG._poro[row][col])* \
+      ve = -self._SG._k[row][col][0] / (self._SG._dx * self._SG._poro[row][col])* \
           (FG._h[row + 1 ][col] - FG._h[row][col])
       #south
-      vs = self._SG._k[row][col][1] / (self._SG._dy * self._SG._poro[row][col])* \
+      vs = -self._SG._k[row][col][1] / (self._SG._dy * self._SG._poro[row][col])* \
           (FG._h[row][col] - FG._h[row][col-1])
       #north
-      vn = self._SG._k[row][col][1] / (self._SG._dy * self._SG._poro[row][col])* \
+      vn = -self._SG._k[row][col][1] / (self._SG._dy * self._SG._poro[row][col])* \
           (FG._h[row ][col + 1] - FG._h[row][col])
+
+      if pow(vw,2) > 1.e-16 and pow(ve,2) > 1.e-16:
+        vx = 2. / (1./vw + 1./ve)
+      else: 
+        vx = 0.
+      if pow(vs,2) > 1.e-16 and pow(ve,2) > 1.e-16:
+        vy = 2./ (1./vs + 1./vn)
+      else: 
+        vy = 0.
+
+      print row, col
+      print vx, vy
+      if  row == 1 :
+        if self._transbctype[0] != 1:
+          if vx > 0.:
+            C[i] += vx
+            r += vx * self._transbcvals[0]
+      elif row == (nx-2):
+        if self._transbctype[1] != 1:
+          if vx > 0:
+            L[i-1] -= vx
+            C[i] += vx
+      elif i < (nx-2):
+        if self._transbctype[2] !=  1:
+          if vy > 0.:
+            C[i] += vy
+            r += vy * self._transbcvals[2]
+      elif i >= (N - (nx-2)):
+        if self._transbctype[3] != 1:
+          if vy > 0:
+            Loff[i-(nx-2)] -= vy
+            C[i] += vy
+      else:
+        if vx > 0:
+          C[i] += vx
+          L[i-1] -= vx
+        if vy > 0:
+          C[i] += vy
+          Loff[i-(nx-2)] -=vy
+
 
       # diffusion coefficients
       CW =  dy / dx * self._SG._D[row][col][0]
@@ -238,22 +283,15 @@ class FTSystem(object):
       CS =  dx / dy * self._SG._D[row][col][1]
       CN =  dx / dy * self._SG._D[row][col][1]
 
-      # am i on west boundary
+      # west boundary
       if  row == 1 :
         if self._transbctype[0] == 1:
           r[i] -= self._transbcvals[0]
         else:
-          # adv
-          r -= self._transbcvals[0] * vw
           # diff
           r[i] -= CW * self._transbcvals[0]
           C[i] -= CW
       else:
-        # adv
-        if vw >= 0.:
-          L[i-1] -= vw
-        else:
-          C[i] -= vw
         # diff
         L[i-1] += CW
         C[i] -= CW
@@ -263,16 +301,10 @@ class FTSystem(object):
         if self._transbctype[1] == 1:
           r[i] += self._transbcvals[1]
         else:
-          # adv
-          r -= self._transbcvals[1] * ve
           # diff
           r[i] -= CE * self._transbcvals[1]
           C[i] -= CE
       else:
-        if ve >= 0.:
-          R[i+1] = -ve
-        else:
-          C[i] -= ve
         R[i+1] += CE
         C[i] -= CE
 
@@ -281,18 +313,9 @@ class FTSystem(object):
         if self._transbctype[2] ==  1:
           r[i] -= self._transbcvals[2]
         else:
-          # adv
-          r -= self._transbcvals[2] * vs
-          # diff
           r[i] -= CS * self._transbcvals[2]
           C[i] -= CS
       else:
-        # adv
-        if vs >= 0.:
-          Loff[i-(nx-2)]  = vs
-        else:
-          C[i] -= vs
-        # diff
         Loff[i-(nx-2)] += CS
         C[i] -= CS
 
@@ -301,16 +324,9 @@ class FTSystem(object):
         if self._transbctype[3] == 1:
           r[i] += self._transbcvals[3]
         else:
-          # adv
-          r -= self._transbcvals[3] * vw
-          # diff
           r[i] -= CN * self._transbcvals[3]
           C[i] -= CN
       else:
-        if vw >= 0.:
-          Roff[i+(nx-2)] -= vw
-        else:
-          C[i] -= vw
         Roff[i+(nx-2)] += CN
         C[i] -= CN
 
@@ -345,7 +361,7 @@ class FTSystem(object):
   def plotFlow(self, timestep = 0):
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    surf = ax.contourf(self._SG._X, self._SG_Y, self._FlowGrids[timestep]._h, 55, \
+    surf = ax.contourf(self._SG._X, self._SG._Y, self._FlowGrids[timestep]._h, 55, \
         cmap = cm.Greys, linewidth = (3,))
     CB = plt.colorbar(surf) 
     ax.set_title('Hydraulic Head Contours [m]')
@@ -353,6 +369,7 @@ class FTSystem(object):
     ax.set_ylabel('y-direction [m]')
     ax.xaxis.grid(True)
     ax.yaxis.grid(True)
+    plt.savefig('flow.png')
     plt.show()
     return 0
   
@@ -367,6 +384,7 @@ class FTSystem(object):
     ax.set_ylabel('y-direction [m]')
     ax.xaxis.grid(True)
     ax.yaxis.grid(True)
+    plt.savefig('transport.png')
     plt.show()
     return 0
 
