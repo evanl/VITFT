@@ -1,6 +1,8 @@
 VITFT
 =====
 
+NOTE: THIS PROJECT IS NOT BEING WORKED ON UNTIL AFTER GRAD SCHOOL.
+
 Vertically Integrated Transient Flow and Transport  Solver
 
 This aims to solve the vertically integrated groundwater flow equation 
